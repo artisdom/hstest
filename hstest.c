@@ -93,7 +93,6 @@ static int rfcomm_connect(int ctl, bdaddr_t *src, bdaddr_t *dst, uint8_t channel
 	}
 
 	snprintf(devname, MAXPATHLEN - 1, "/dev/rfcomm%d", dev);
-    printf("try %s\n", devname);
 	while ((fd = open(devname, O_RDONLY)) > 0) {
         printf("%s exist, try next.\n", devname);
         close(fd);
@@ -222,7 +221,7 @@ int main(int argc, char *argv[])
 
 	fd_set rfds;
 	struct timeval timeout;
-	unsigned char buf[2048], *p;
+	unsigned char buf[2048], wbuf[2048], *p;
 	int maxfd, sel, rlen, wlen;
 
 	bdaddr_t local;
@@ -279,7 +278,6 @@ int main(int argc, char *argv[])
 		perror("Can't open RFCOMM control socket");
 		exit(1);
     }
-
 
 	if (strcmp(filename, "-") == 0) {
 		switch (mode) {
@@ -346,8 +344,25 @@ int main(int argc, char *argv[])
                 printf("read from rfcomm: %s\n", buf);
 				if (rlen > 0) {
 					fprintf(stderr, "%s\n", buf);
+                    memset(buf, 0, sizeof(buf));
+                    printf("> ");
+                    fflush(0);
+                    rlen = read(0, buf, sizeof(buf));
+                    if (rlen > 1) {
+                        buf[rlen-1] = '\0';
+                        printf("you input is: %s\n", buf);
+
+                        memset(wbuf, 0, sizeof(wbuf));
+                        snprintf(wbuf, 2048, "\r\n%s\r\n", buf);
+
+                        wlen = write(rd, wbuf, sizeof(wbuf));
+                        printf("write to rfcomm: %s", wbuf);
+                    }
+                    
+                    /*
 					wlen = write(rd, "OK\r\n", 4);
                     printf("write to rfcomm: OK\n");
+                    */
 
 				}
 			}
