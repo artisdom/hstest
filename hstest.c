@@ -93,7 +93,6 @@ static int rfcomm_connect(int ctl, bdaddr_t *src, bdaddr_t *dst, uint8_t channel
 	}
 
 	snprintf(devname, MAXPATHLEN - 1, "/dev/rfcomm%d", dev);
-    printf("try %s\n", devname);
 	while ((fd = open(devname, O_RDONLY)) > 0) {
         printf("%s exist, try next.\n", devname);
         close(fd);
@@ -279,7 +278,6 @@ int main(int argc, char *argv[])
 		perror("Can't open RFCOMM control socket");
 		exit(1);
     }
-
 
 	if (strcmp(filename, "-") == 0) {
 		switch (mode) {
