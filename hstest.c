@@ -210,7 +210,7 @@ int main(int argc, char *argv[])
 	fd_set rfds;
 	struct timeval timeout;
 	unsigned char buf[2048], wbuf[2048], *p;
-	int maxfd, sel, rlen, wlen;
+	int maxfd, sel, rlen, wlen, try = 0;
 
 	bdaddr_t local;
 	bdaddr_t bdaddr;
@@ -285,6 +285,24 @@ int main(int argc, char *argv[])
     maxfd = rd;
 
 	while (!terminate) {
+        if(try == 30) {
+            memset(buf, 0, sizeof(buf));
+            printf("> ");
+            fflush(0);
+            rlen = read(0, buf, sizeof(buf));
+            if (rlen > 1) {
+                buf[rlen-1] = '\0';
+                printf("you input is: %s\n", buf);
+
+                memset(wbuf, 0, sizeof(wbuf));
+                snprintf(wbuf, 2048, "%s\r\n", buf);
+
+                wlen = write(rd, wbuf, sizeof(wbuf));
+                printf("write to rfcomm: %s", wbuf);
+            }
+            try = 0;
+        }
+        try++;
 
 		FD_ZERO(&rfds);
 		FD_SET(rd, &rfds);
