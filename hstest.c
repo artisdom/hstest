@@ -200,7 +200,7 @@ static int sco_connect(bdaddr_t *src, bdaddr_t *dst, uint16_t *handle, uint16_t 
 static void usage(void)
 {
 	printf("Usage:\n"
-		"\thfptest <bdaddr> [channel]\n");
+		"\thstest <bdaddr> [channel]\n");
 }
 
 int main(int argc, char *argv[])
@@ -209,7 +209,7 @@ int main(int argc, char *argv[])
 
 	fd_set rfds;
 	struct timeval timeout;
-	unsigned char buf[2048], buf1[2048], *p;
+	unsigned char buf[2048], wbuf[2048], *p;
 	int maxfd, sel, rlen, wlen;
 
 	bdaddr_t local;
@@ -293,30 +293,27 @@ int main(int argc, char *argv[])
 		timeout.tv_sec = 0;
 		timeout.tv_usec = 10000;
 
-        memset(buf, 0, sizeof(buf));
-        printf("> ");
-        fflush(0);
-        rlen = read(0, buf, sizeof(buf));
-        if (rlen > 1) {
-            buf[rlen-1] = '\0';
-            printf("you input is: %s\n", buf);
-
-            memset(buf1, 0, sizeof(buf1));
-            snprintf(buf1, 2048, "\r\n%s\r\n", buf);
-
-            wlen = write(rd, buf1, sizeof(buf1));
-            printf("write to rfcomm: %s", buf1);
-        }
-
 		if ((sel = select(maxfd + 1, &rfds, NULL, NULL, &timeout)) > 0) {
 
 			if (FD_ISSET(rd, &rfds)) {
 				memset(buf, 0, sizeof(buf));
 				rlen = read(rd, buf, sizeof(buf));
-                //printf("read from rfcomm: %s\n", buf);
 				if (rlen > 0) {
 					fprintf(stderr, "read from rfcomm:%s\n", buf);
+                    memset(buf, 0, sizeof(buf));
+                    printf("> ");
+                    fflush(0);
+                    rlen = read(0, buf, sizeof(buf));
+                    if (rlen > 1) {
+                        buf[rlen-1] = '\0';
+                        printf("you input is: %s\n", buf);
 
+                        memset(wbuf, 0, sizeof(wbuf));
+                        snprintf(wbuf, 2048, "%s\r\n", buf);
+
+                        wlen = write(rd, wbuf, sizeof(wbuf));
+                        printf("write to rfcomm: %s", wbuf);
+                    }
 				}
 			}
 
