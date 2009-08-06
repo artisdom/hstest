@@ -92,14 +92,6 @@ static int rfcomm_connect(int ctl, bdaddr_t *src, bdaddr_t *dst, uint8_t channel
 		return -1;
 	}
 
-	snprintf(devname, MAXPATHLEN - 1, "/dev/rfcomm%d", dev);
-	while ((fd = open(devname, O_RDONLY)) > 0) {
-        printf("%s exist, try next.\n", devname);
-        close(fd);
-        dev++;
-        snprintf(devname, MAXPATHLEN - 1, "/dev/rfcomm%d", dev);
-    }
-
 	memset(&req, 0, sizeof(req));
 	req.dev_id = dev;
 	req.flags = (1 << RFCOMM_REUSE_DLC) | (1 << RFCOMM_RELEASE_ONHUP);
@@ -208,12 +200,8 @@ static int sco_connect(bdaddr_t *src, bdaddr_t *dst, uint16_t *handle, uint16_t 
 static void usage(void)
 {
 	printf("Usage:\n"
-		"\thstest play   <file> <bdaddr> [channel]\n"
-		"\thstest record <file> <bdaddr> [channel]\n");
+		"\thfptest <bdaddr> [channel]\n");
 }
-
-#define PLAY	1
-#define RECORD	2
 
 int main(int argc, char *argv[])
 {
@@ -221,46 +209,30 @@ int main(int argc, char *argv[])
 
 	fd_set rfds;
 	struct timeval timeout;
-	unsigned char buf[2048], wbuf[2048], *p;
+	unsigned char buf[2048], buf1[2048], *p;
 	int maxfd, sel, rlen, wlen;
 
 	bdaddr_t local;
 	bdaddr_t bdaddr;
 	uint8_t channel;
 
-	char *filename;
-	mode_t filemode;
-	int err, mode = 0;
-	int dd, rd, sd, fd, ctl;
-	uint16_t sco_handle, sco_mtu, vs;
+	int dd, rd, ctl;
+	uint16_t vs;
 
 	switch (argc) {
-	case 4:
-		str2ba(argv[3], &bdaddr);
+	case 2:
+		str2ba(argv[1], &bdaddr);
 		//channel = 6;
 		channel = 1;
 		break;
-	case 5:
-		str2ba(argv[3], &bdaddr);
-		channel = atoi(argv[4]);
+	case 3:
+		str2ba(argv[1], &bdaddr);
+		channel = atoi(argv[2]);
 		break;
 	default:
 		usage();
 		exit(-1);
 	}
-
-	if (strncmp(argv[1], "play", 4) == 0) {
-		mode = PLAY;
-		filemode = O_RDONLY;
-	} else if (strncmp(argv[1], "rec", 3) == 0) {
-		mode = RECORD;
-		filemode = O_RDWR | O_CREAT | O_TRUNC;
-	} else {
-		usage();
-		exit(-1);
-	}
-
-	filename = argv[2];
 
 	hci_devba(0, &local);
 	dd = hci_open_dev(0);
@@ -279,24 +251,6 @@ int main(int argc, char *argv[])
 		exit(1);
     }
 
-	if (strcmp(filename, "-") == 0) {
-		switch (mode) {
-		case PLAY:
-			fd = 0;
-			break;
-		case RECORD:
-			fd = 1;
-			break;
-		default:
-			return -1;
-		}
-	} else {
-		if ((fd = open(filename, filemode)) < 0) {
-			perror("Can't open input/output file");
-			return -1;
-		}
-	}
-
 	memset(&sa, 0, sizeof(sa));
 	sa.sa_flags = SA_NOCLDSTOP;
 	sa.sa_handler = sig_term;
@@ -313,6 +267,7 @@ int main(int argc, char *argv[])
 
 	fprintf(stderr, "RFCOMM channel connected\n");
 
+    /*
 	if ((sd = sco_connect(&local, &bdaddr, &sco_handle, &sco_mtu)) < 0) {
 		perror("Can't connect SCO audio channel");
 		close(rd);
@@ -326,47 +281,46 @@ int main(int argc, char *argv[])
 		err = write(rd, "RING\r\n", 6);
 
 	maxfd = (rd > sd) ? rd : sd;
+    */
+    maxfd = rd;
 
 	while (!terminate) {
 
 		FD_ZERO(&rfds);
 		FD_SET(rd, &rfds);
-		FD_SET(sd, &rfds);
+		//FD_SET(sd, &rfds);
 
 		timeout.tv_sec = 0;
 		timeout.tv_usec = 10000;
+
+        memset(buf, 0, sizeof(buf));
+        printf("> ");
+        fflush(0);
+        rlen = read(0, buf, sizeof(buf));
+        if (rlen > 1) {
+            buf[rlen-1] = '\0';
+            printf("you input is: %s\n", buf);
+
+            memset(buf1, 0, sizeof(buf1));
+            snprintf(buf1, 2048, "\r\n%s\r\n", buf);
+
+            wlen = write(rd, buf1, sizeof(buf1));
+            printf("write to rfcomm: %s", buf1);
+        }
 
 		if ((sel = select(maxfd + 1, &rfds, NULL, NULL, &timeout)) > 0) {
 
 			if (FD_ISSET(rd, &rfds)) {
 				memset(buf, 0, sizeof(buf));
 				rlen = read(rd, buf, sizeof(buf));
-                printf("read from rfcomm: %s\n", buf);
+                //printf("read from rfcomm: %s\n", buf);
 				if (rlen > 0) {
-					fprintf(stderr, "%s\n", buf);
-                    memset(buf, 0, sizeof(buf));
-                    printf("> ");
-                    fflush(0);
-                    rlen = read(0, buf, sizeof(buf));
-                    if (rlen > 1) {
-                        buf[rlen-1] = '\0';
-                        printf("you input is: %s\n", buf);
-
-                        memset(wbuf, 0, sizeof(wbuf));
-                        snprintf(wbuf, 2048, "\r\n%s\r\n", buf);
-
-                        wlen = write(rd, wbuf, sizeof(wbuf));
-                        printf("write to rfcomm: %s", wbuf);
-                    }
-                    
-                    /*
-					wlen = write(rd, "OK\r\n", 4);
-                    printf("write to rfcomm: OK\n");
-                    */
+					fprintf(stderr, "read from rfcomm:%s\n", buf);
 
 				}
 			}
 
+            /*
 			if (FD_ISSET(sd, &rfds)) {
 				memset(buf, 0, sizeof(buf));
 				rlen = read(sd, buf, sizeof(buf));
@@ -391,15 +345,16 @@ int main(int argc, char *argv[])
 						break;
 					}
 			}
+            */
 
 		}
 
 	}
 
-	close(sd);
+	//close(sd);
     close(ctl);
 	close(rd);
-	close(fd);
+	//close(fd);
 
 	return 0;
 }
