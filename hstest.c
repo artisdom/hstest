@@ -353,7 +353,7 @@ int main(int argc, char *argv[])
                         printf("you input is: %s\n", buf);
 
                         memset(wbuf, 0, sizeof(wbuf));
-                        snprintf(wbuf, 2048, "\r\n%s\r\n", buf);
+                        snprintf(wbuf, 2048, "\r\n%s\r\n\r\nOK\r\n", buf);
 
                         wlen = write(rd, wbuf, sizeof(wbuf));
                         printf("write to rfcomm: %s", wbuf);
