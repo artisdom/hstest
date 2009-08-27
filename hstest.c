@@ -37,18 +37,210 @@
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/param.h>
+#include <sys/poll.h>
 
 #include <bluetooth/bluetooth.h>
 #include <bluetooth/hci.h>
 #include <bluetooth/hci_lib.h>
 #include <bluetooth/sco.h>
 #include <bluetooth/rfcomm.h>
+#include <bluetooth/l2cap.h>
 
 static volatile int terminate = 0;
+char pincode[5];
 
 static void sig_term(int sig) {
 	terminate = 1;
 }
+
+/*
+static int info_request(char *svr)
+{
+    unsigned char buf[48];
+    l2cap_cmd_hdr *cmd = (l2cap_cmd_hdr *) buf;
+    l2cap_info_req *req = (l2cap_info_req *) (buf + L2CAP_CMD_HDR_SIZE);
+    l2cap_info_rsp *rsp = (l2cap_info_rsp *) (buf + L2CAP_CMD_HDR_SIZE);
+    l2cap_conn_req *req_n = (l2cap_conn_req *) (buf + L2CAP_CMD_HDR_SIZE);
+    l2cap_conn_rsp *rsp_n = (l2cap_conn_rsp *) (buf + L2CAP_CMD_HDR_SIZE);
+    l2cap_conf_req *req_f = (l2cap_conf_req *) (buf + L2CAP_CMD_HDR_SIZE);
+    l2cap_conf_rsp *rsp_f = (l2cap_conf_rsp *) (buf + L2CAP_CMD_HDR_SIZE);
+    uint16_t mtu, scid, dcid;
+    uint32_t channels, mask = 0x0000;
+    struct sockaddr_l2 addr;
+    int sk, err;
+    static bdaddr_t bdaddr;
+
+    sk = socket(PF_BLUETOOTH, SOCK_RAW, BTPROTO_L2CAP);
+    if (sk < 0) {
+        perror("Can't create socket");
+        return -1;
+    }
+
+    bacpy(&bdaddr, BDADDR_ANY);
+    memset(&addr, 0, sizeof(addr));
+    addr.l2_family = AF_BLUETOOTH;
+    bacpy(&addr.l2_bdaddr, &bdaddr);
+
+    if (bind(sk, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
+        perror("Can't bind socket");
+        goto failed;
+    }
+
+    memset(&addr, 0, sizeof(addr));
+    addr.l2_family = AF_BLUETOOTH;
+    str2ba(svr, &addr.l2_bdaddr);
+
+    if (connect(sk, (struct sockaddr *) &addr, sizeof(addr)) < 0 ) {
+        perror("Can't connect socket");
+        goto failed;
+    }
+
+    memset(buf, 0, sizeof(buf));
+    cmd->code  = EVT_LINK_KEY_REQ
+    cmd->ident = 142;
+    cmd->len   = htobs(2);
+    req->type  = htobs(0x0002);
+
+    if (send(sk, buf, L2CAP_CMD_HDR_SIZE + L2CAP_INFO_REQ_SIZE, 0) < 0) {
+        perror("Can't send info request");
+        goto failed;
+    }
+
+    err = recv(sk, buf, L2CAP_CMD_HDR_SIZE + L2CAP_INFO_RSP_SIZE + 4, 0);
+    if (err < 0) {
+        perror("Can't receive info response");
+        goto failed;
+    }
+
+    memset(buf, 0, sizeof(buf));
+    cmd->code  = L2CAP_INFO_REQ;
+    cmd->ident = 142;
+    cmd->len   = htobs(2);
+    req->type  = htobs(0x0002);
+
+    if (send(sk, buf, L2CAP_CMD_HDR_SIZE + L2CAP_INFO_REQ_SIZE, 0) < 0) {
+        perror("Can't send info request");
+        goto failed;
+    }
+
+    err = recv(sk, buf, L2CAP_CMD_HDR_SIZE + L2CAP_INFO_RSP_SIZE + 4, 0);
+    if (err < 0) {
+        perror("Can't receive info response");
+        goto failed;
+    }
+
+    switch (btohs(rsp->result)) {
+        case 0x0000:
+            memcpy(&mask, rsp->data, sizeof(mask));
+            printf("Extended feature mask is 0x%04x\n", btohl(mask));
+            if (mask & 0x01)
+                printf("  Flow control mode\n");
+            if (mask & 0x02)
+                printf("  Retransmission mode\n");
+            if (mask & 0x04)
+                printf("  Bi-directional QoS\n");
+            if (mask & 0x08)
+                printf("  Enhanced Retransmission mode\n");
+            if (mask & 0x10)
+                printf("  Streaming mode\n");
+            if (mask & 0x20)
+                printf("  FCS Option\n");
+            if (mask & 0x40)
+                printf("  Extended Flow Specification\n");
+            if (mask & 0x80)
+                printf("  Fixed Channels\n");
+            if (mask & 0x0100)
+                printf("  Extended Window Size\n");
+            if (mask & 0x0200)
+                printf("  Unicast Connectionless Data Reception\n");
+            break;
+        case 0x0001:
+            printf("Extended feature mask is not supported\n");
+            break;
+    }
+
+    memset(buf, 0, sizeof(buf));
+    cmd->code  = L2CAP_CONN_REQ;
+    cmd->ident = 143;
+    cmd->len   = htobs(4);
+    req_n->psm  = htobs(1);
+    req_n->scid = htobs(0x0040);
+
+    if (send(sk, buf, L2CAP_CMD_HDR_SIZE + L2CAP_CONN_REQ_SIZE, 0) < 0) {
+        perror("Can't send conn request");
+        goto failed;
+    }
+
+    err = recv(sk, buf, L2CAP_CMD_HDR_SIZE + L2CAP_CONN_RSP_SIZE + 4, 0);
+    if (err < 0) {
+        perror("Can't receive conn response");
+        goto failed;
+    }
+    printf("Connect rsp: dcid 0x%04x scid 0x%04x result %d status %d\n",
+            btohs(rsp_n->dcid),
+            btohs(rsp_n->scid),
+            btohs(rsp_n->result),
+            btohs(rsp_n->status));
+    switch (btohs(rsp_n->result)) {
+        case 0x0000:
+            printf("Connection successful\n");
+            break;
+        case 0x0001:
+            printf("Connection pending\n");
+            break;
+        case 0x0002:
+            printf("bad psm\n");
+            break;
+        case 0x0003:
+            printf("sec block\n");
+            break;
+        case 0x0004:
+            printf("no memory\n");
+            break;
+    }
+
+    scid = rsp_n->dcid;
+    dcid = rsp_n->scid;
+
+    memset(buf, 0, sizeof(buf));
+    cmd->code  = L2CAP_CONF_REQ;
+    cmd->ident = 144;
+    cmd->len   = htobs(4);
+    req_f->dcid = dcid;
+    req_f->flags = htobs(0x00);
+
+    if (send(sk, buf, L2CAP_CMD_HDR_SIZE + L2CAP_CONF_REQ_SIZE, 0) < 0) {
+        perror("Can't send conf request");
+        goto failed;
+    }
+
+    err = recv(sk, buf, L2CAP_CMD_HDR_SIZE + L2CAP_CONF_RSP_SIZE + 4, 0);
+    if (err < 0) {
+        perror("Can't receive conf response");
+        goto failed;
+    }
+
+    sleep(5);
+    memset(buf, 0, sizeof(buf));
+    cmd->code  = L2CAP_CONF_RSP;
+    cmd->ident = 145;
+    cmd->len   = htobs(4);
+    rsp_f->scid = scid;
+    rsp_f->flags = htobs(0x00);
+
+    if (send(sk, buf, L2CAP_CMD_HDR_SIZE + L2CAP_CONF_RSP_SIZE, 0) < 0) {
+        perror("Can't send conf request");
+        goto failed;
+    }
+
+    close(sk);
+    return 0;
+
+failed:
+    close(sk);
+    return -1;
+}
+*/
 
 static int rfcomm_connect(int ctl, bdaddr_t *src, bdaddr_t *dst, uint8_t channel)
 {
@@ -205,11 +397,115 @@ static int sco_connect(bdaddr_t *src, bdaddr_t *dst, uint16_t *handle, uint16_t 
 	return s;
 }
 
+static int hci_send_req_n(int dd, struct hci_request *r, int to)
+{
+    unsigned char buf[HCI_MAX_EVENT_SIZE], *ptr;
+    struct hci_filter nf, of;
+    socklen_t olen;
+    hci_event_hdr *hdr;
+    int err, try;
+
+    olen = sizeof(of);
+    if (getsockopt(dd, SOL_HCI, HCI_FILTER, &of, &olen) < 0)
+        return -1;
+
+    hci_filter_clear(&nf);
+    hci_filter_set_ptype(HCI_EVENT_PKT,  &nf);
+    hci_filter_set_event(EVT_CMD_STATUS, &nf);
+    hci_filter_set_event(EVT_CMD_COMPLETE, &nf);
+    hci_filter_set_event(EVT_LINK_KEY_REQ, &nf);
+    hci_filter_set_event(EVT_PIN_CODE_REQ, &nf);
+    hci_filter_set_event(r->event, &nf);
+    if (setsockopt(dd, SOL_HCI, HCI_FILTER, &nf, sizeof(nf)) < 0)
+        return -1;
+
+    if (hci_send_cmd(dd, r->ogf, r->ocf, r->clen, r->cparam) < 0)
+        goto failed;
+
+    try = 10;
+    while (try--) {
+        evt_cmd_complete *cc;
+        evt_cmd_status *cs;
+        evt_remote_name_req_complete *rn;
+        remote_name_req_cp *cp;
+        evt_link_key_req *lkrq;
+        evt_pin_code_req *pcrq;
+        pin_code_reply_cp pcrp;
+        int len;
+
+        if (to) {
+            struct pollfd p;
+            int n;
+
+            p.fd = dd; p.events = POLLIN;
+            while ((n = poll(&p, 1, to)) < 0) {
+                if (errno == EAGAIN || errno == EINTR)
+                    continue;
+                goto failed;
+            }
+
+            if (!n) {
+                errno = ETIMEDOUT;
+                goto failed;
+            }
+
+            to -= 10;
+            if (to < 0) to = 0;
+
+        }
+
+        while ((len = read(dd, buf, sizeof(buf))) < 0) {
+            if (errno == EAGAIN || errno == EINTR)
+                continue;
+            goto failed;
+        }
+
+        hdr = (void *) (buf + 1);
+        ptr = buf + (1 + HCI_EVENT_HDR_SIZE);
+        len -= (1 + HCI_EVENT_HDR_SIZE);
+
+        switch (hdr->evt) {
+            case EVT_LINK_KEY_REQ:
+                lkrq = (void *) ptr;
+                hci_send_cmd(dd, OGF_LINK_CTL, OCF_LINK_KEY_NEG_REPLY, 6, &((*lkrq).bdaddr));
+                break;
+
+            case EVT_PIN_CODE_REQ:
+                pcrq = (void *) ptr;
+                size_t len;
+                len = strlen(pincode);
+                memset(&pcrp, 0, sizeof(pcrp));
+                bacpy(&pcrp.bdaddr, &((*pcrq).bdaddr));
+                memcpy(pcrp.pin_code, pincode, len);
+                pcrp.pin_len = len;
+                hci_send_cmd(dd, OGF_LINK_CTL, OCF_PIN_CODE_REPLY,
+                        PIN_CODE_REPLY_CP_SIZE, &pcrp);
+                break;
+            case EVT_AUTH_COMPLETE:
+                goto done;
+
+            default:
+                break;
+        }
+    }
+    errno = ETIMEDOUT;
+
+failed:
+    err = errno;
+    setsockopt(dd, SOL_HCI, HCI_FILTER, &of, sizeof(of));
+    errno = err;
+    return -1;
+
+done:
+    setsockopt(dd, SOL_HCI, HCI_FILTER, &of, sizeof(of));
+    return 0;
+}
+
 static void usage(void)
 {
 	printf("Usage:\n"
-		"\thstest play   <file> <bdaddr> [channel]\n"
-		"\thstest record <file> <bdaddr> [channel]\n");
+		"\thstest play   <file> <pincode> <bdaddr> [channel]\n"
+		"\thstest record <file> <pincode> <bdaddr> [channel]\n");
 }
 
 #define PLAY	1
@@ -234,20 +530,15 @@ int main(int argc, char *argv[])
 	int dd, rd, sd, fd, ctl;
 	uint16_t sco_handle, sco_mtu, vs;
 
-	switch (argc) {
-	case 4:
-		str2ba(argv[3], &bdaddr);
-		//channel = 6;
-		channel = 1;
-		break;
-	case 5:
-		str2ba(argv[3], &bdaddr);
-		channel = atoi(argv[4]);
-		break;
-	default:
-		usage();
-		exit(-1);
-	}
+    uint16_t handle;
+    uint8_t role;
+    unsigned int ptype;
+    size_t len;
+    evt_auth_complete rp;
+    struct hci_request rq;
+
+    role = 0x01;
+    ptype = HCI_DM1 | HCI_DM3 | HCI_DM5 | HCI_DH1 | HCI_DH3 | HCI_DH5;
 
 	if (strncmp(argv[1], "play", 4) == 0) {
 		mode = PLAY;
@@ -259,19 +550,58 @@ int main(int argc, char *argv[])
 		usage();
 		exit(-1);
 	}
-
 	filename = argv[2];
+
+    memset(pincode, 0, sizeof(pincode));
+    strncpy(pincode, argv[3], 4);
+    printf("pincode: %s\n", pincode);
+    str2ba(argv[4], &bdaddr);
+	switch (argc) {
+	case 5:
+		channel = 1;
+		break;
+	case 6:
+		channel = atoi(argv[5]);
+		break;
+	default:
+		usage();
+		exit(-1);
+	}
 
 	hci_devba(0, &local);
 	dd = hci_open_dev(0);
+    if (dd < 0) {
+        perror("HCI device open failed");
+        exit(1);
+    }
 	hci_read_voice_setting(dd, &vs, 1000);
 	vs = htobs(vs);
 	fprintf(stderr, "Voice setting: 0x%04x\n", vs);
-	close(dd);
 	if (vs != 0x0060) {
 		fprintf(stderr, "The voice setting must be 0x0060\n");
 		return -1;
 	}
+
+    if (hci_create_connection(dd, &bdaddr, htobs(ptype),
+                htobs(0x0000), role, &handle, 25000) < 0)
+    {
+        perror("Can't create connection");
+        exit(1);
+    }
+
+    cp.handle = handle;
+
+    rq.ogf    = OGF_LINK_CTL;
+    rq.ocf    = OCF_AUTH_REQUESTED;
+    rq.event  = EVT_AUTH_COMPLETE;
+    rq.cparam = &cp;
+    rq.clen   = AUTH_REQUESTED_CP_SIZE;
+    rq.rparam = &rp;
+    rq.rlen   = EVT_AUTH_COMPLETE_SIZE;
+    hci_send_cmd(dd, rq.ogf, rq.ocf, rq.clen, rq.cparam);
+    hci_send_req_n(dd, &rq, 25000);
+
+    hci_close_dev(dd);
 
     ctl = socket(AF_BLUETOOTH, SOCK_RAW, BTPROTO_RFCOMM);
 	if (ctl < 0) {
