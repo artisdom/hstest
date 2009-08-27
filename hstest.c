@@ -535,6 +535,7 @@ int main(int argc, char *argv[])
     unsigned int ptype;
     size_t len;
     evt_auth_complete rp;
+    auth_requested_cp cp;
     struct hci_request rq;
 
     role = 0x01;
@@ -598,7 +599,6 @@ int main(int argc, char *argv[])
     rq.clen   = AUTH_REQUESTED_CP_SIZE;
     rq.rparam = &rp;
     rq.rlen   = EVT_AUTH_COMPLETE_SIZE;
-    hci_send_cmd(dd, rq.ogf, rq.ocf, rq.clen, rq.cparam);
     hci_send_req_n(dd, &rq, 25000);
 
     hci_close_dev(dd);
@@ -687,6 +687,8 @@ int main(int argc, char *argv[])
 					switch (mode) {
 					case PLAY:
 						rlen = read(fd, buf, rlen);
+                        if(rlen == 0)
+                            goto done;
 
 						wlen = 0; 
 						p = buf;
@@ -709,6 +711,7 @@ int main(int argc, char *argv[])
 
 	}
 
+done:
 	close(sd);
     close(ctl);
 	close(rd);
