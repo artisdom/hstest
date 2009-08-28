@@ -48,6 +48,7 @@ static void sig_term(int sig) {
 	terminate = 1;
 }
 
+/*
 static int info_request(char *svr)
 {
     unsigned char buf[48];
@@ -234,6 +235,7 @@ failed:
     close(sk);
     return -1;
 }
+*/
 
 static int rfcomm_connect(int ctl, bdaddr_t *src, bdaddr_t *dst, uint8_t channel)
 {
