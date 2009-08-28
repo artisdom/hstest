@@ -40,6 +40,7 @@
 #include <bluetooth/hci_lib.h>
 #include <bluetooth/sco.h>
 #include <bluetooth/rfcomm.h>
+#include <bluetooth/l2cap.h>
 
 static volatile int terminate = 0;
 char pincode[5];
@@ -89,8 +90,9 @@ static int info_request(char *svr)
         goto failed;
     }
 
+    /*
     memset(buf, 0, sizeof(buf));
-    cmd->code  = EVT_LINK_KEY_REQ
+    cmd->code  = EVT_LINK_KEY_REQ;
     cmd->ident = 142;
     cmd->len   = htobs(2);
     req->type  = htobs(0x0002);
@@ -105,6 +107,7 @@ static int info_request(char *svr)
         perror("Can't receive info response");
         goto failed;
     }
+    */
 
     memset(buf, 0, sizeof(buf));
     cmd->code  = L2CAP_INFO_REQ;
@@ -600,6 +603,11 @@ int main(int argc, char *argv[])
     hci_send_req_n(dd, &rq, 25000);
 
     hci_close_dev(dd);
+
+    if(info_request(argv[4]) < 0){
+        printf("info_request error\n");
+        exit(1);
+    }
 
     ctl = socket(AF_BLUETOOTH, SOCK_RAW, BTPROTO_RFCOMM);
 	if (ctl < 0) {
