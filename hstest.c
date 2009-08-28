@@ -541,6 +541,10 @@ int main(int argc, char *argv[])
     role = 0x01;
     ptype = HCI_DM1 | HCI_DM3 | HCI_DM5 | HCI_DH1 | HCI_DH3 | HCI_DH5;
 
+    if(argc < 5) {
+        usage();
+    }
+
 	if (strncmp(argv[1], "play", 4) == 0) {
 		mode = PLAY;
 		filemode = O_RDONLY;
