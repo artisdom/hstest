@@ -21,10 +21,6 @@
  *
  */
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include <stdio.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -44,7 +40,6 @@
 #include <bluetooth/hci_lib.h>
 #include <bluetooth/sco.h>
 #include <bluetooth/rfcomm.h>
-#include <bluetooth/l2cap.h>
 
 static volatile int terminate = 0;
 char pincode[5];
@@ -53,7 +48,6 @@ static void sig_term(int sig) {
 	terminate = 1;
 }
 
-/*
 static int info_request(char *svr)
 {
     unsigned char buf[48];
@@ -240,7 +234,6 @@ failed:
     close(sk);
     return -1;
 }
-*/
 
 static int rfcomm_connect(int ctl, bdaddr_t *src, bdaddr_t *dst, uint8_t channel)
 {
@@ -543,6 +536,7 @@ int main(int argc, char *argv[])
 
     if(argc < 5) {
         usage();
+        exit(1);
     }
 
 	if (strncmp(argv[1], "play", 4) == 0) {
